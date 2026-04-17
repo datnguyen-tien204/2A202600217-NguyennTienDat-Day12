@@ -3,9 +3,8 @@ services:
     name: vinmecprep-ai
     env: python
     plan: free
-    rootDir: 06-lab-complete
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    buildCommand: cd 06-lab-complete && pip install -r requirements.txt
+    startCommand: cd 06-lab-complete && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
     envVars:
