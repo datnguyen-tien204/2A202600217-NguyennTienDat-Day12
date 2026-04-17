@@ -19,21 +19,25 @@
 ## Deployment checklist
 
 ### Part 3
-- [ ] Deploy the app from `03-cloud-deployment/railway/` or `03-cloud-deployment/render/`
-- [ ] Open the public URL in a browser
-- [ ] Confirm `/health` returns 200
-- [ ] Capture a deployment screenshot
-- [ ] Capture a health check screenshot
+- [x] Deploy the app from `03-cloud-deployment/railway/` or `03-cloud-deployment/render/`
+- [x] Open the public URL in a browser
+- [x] Confirm `/health` returns 200
+- [x] Capture a deployment screenshot
+- [x] Capture a health check screenshot
+
+Evidence: [images/Railway-b3.png](images/Railway-b3.png)
 
 ### Part 5
-- [ ] Deploy using `05-scaling-reliability/render.yaml`
-- [ ] Confirm Redis is attached
-- [ ] Confirm `/health` returns 200
-- [ ] Confirm `/ready` returns 200
-- [ ] Run `test_stateless.py` against the public URL
-- [ ] Capture a deployment screenshot
-- [ ] Capture a health check screenshot
-- [ ] Capture the `test_stateless.py` output
+- [x] Deploy using `05-scaling-reliability/render.yaml`
+- [x] Confirm Redis is attached
+- [x] Confirm `/health` returns 200
+- [x] Confirm `/ready` returns 200
+- [x] Run `test_stateless.py` against the public URL
+- [x] Capture a deployment screenshot
+- [x] Capture a health check screenshot
+- [x] Capture the `test_stateless.py` output
+
+Evidence: [images/render-b5.png](images/render-b5.png)
 
 ## Environment variables set
 
