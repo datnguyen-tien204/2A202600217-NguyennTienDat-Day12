@@ -23,4 +23,5 @@ services:
   - type: redis
     name: vinmecprep-redis
     plan: free
+    ipAllowList: []
     maxmemoryPolicy: allkeys-lru
