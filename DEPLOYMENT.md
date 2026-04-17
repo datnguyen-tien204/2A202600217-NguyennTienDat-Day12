@@ -8,8 +8,8 @@
 
 ## Public URLs
 
-- Part 3 URL: ____________________
-- Part 5 URL: ____________________
+- Part 3 URL: https://2a202600217-nguyenntiendat-day12-production.up.railway.app
+- Part 5 URL: https://scaling-reliability-agent.onrender.com
 
 ## Platform
 
@@ -47,16 +47,16 @@
 
 ### Part 3
 ```bash
-curl https://YOUR-PART-3-URL/health
-curl -X POST https://YOUR-PART-3-URL/ask \
+curl https://2a202600217-nguyenntiendat-day12-production.up.railway.app/health
+curl -X POST https://2a202600217-nguyenntiendat-day12-production.up.railway.app/ask \
   -H "Content-Type: application/json" \
   -d '{"question": "Hello"}'
 ```
 
 ### Part 5
 ```bash
-curl https://YOUR-PART-5-URL/health
-curl https://YOUR-PART-5-URL/ready
+curl https://scaling-reliability-agent.onrender.com/health
+curl https://scaling-reliability-agent.onrender.com/ready
 ```
 
 ## Screenshots to attach

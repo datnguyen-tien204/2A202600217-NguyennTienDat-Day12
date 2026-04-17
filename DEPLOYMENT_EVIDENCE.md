@@ -3,7 +3,7 @@
 ## Part 3 - Cloud Deployment
 
 ### Target
-- [ ] Railway or Render public URL
+- [x] Railway public URL: https://2a202600217-nguyenntiendat-day12-production.up.railway.app
 
 ### Checklist
 - [ ] Deploy `03-cloud-deployment/railway/` or `03-cloud-deployment/render/`
@@ -14,8 +14,8 @@
 
 ### Commands
 ```bash
-curl https://YOUR-PART-3-URL/health
-curl -X POST https://YOUR-PART-3-URL/ask \
+curl https://2a202600217-nguyenntiendat-day12-production.up.railway.app/health
+curl -X POST https://2a202600217-nguyenntiendat-day12-production.up.railway.app/ask \
   -H "Content-Type: application/json" \
   -d '{"question":"Hello"}'
 ```
@@ -23,7 +23,7 @@ curl -X POST https://YOUR-PART-3-URL/ask \
 ## Part 5 - Scaling & Reliability
 
 ### Target
-- [ ] Render public URL with Redis
+- [x] Render public URL with Redis: https://scaling-reliability-agent.onrender.com
 
 ### Checklist
 - [ ] Deploy `05-scaling-reliability/render.yaml`
@@ -37,10 +37,10 @@ curl -X POST https://YOUR-PART-3-URL/ask \
 
 ### Commands
 ```bash
-set BASE_URL=https://YOUR-PART-5-URL
+set BASE_URL=https://scaling-reliability-agent.onrender.com
 python 05-scaling-reliability/production/test_stateless.py
-curl https://YOUR-PART-5-URL/health
-curl https://YOUR-PART-5-URL/ready
+curl https://scaling-reliability-agent.onrender.com/health
+curl https://scaling-reliability-agent.onrender.com/ready
 ```
 
 ## What to Put in the Report
