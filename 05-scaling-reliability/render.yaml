@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: scaling-reliability-agent
+    env: python
+    plan: free
+    rootDir: 05-scaling-reliability/production
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: REQUIRE_REDIS
+        value: "true"
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: scaling-reliability-redis
+          property: connectionString
+
+  - type: redis
+    name: scaling-reliability-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

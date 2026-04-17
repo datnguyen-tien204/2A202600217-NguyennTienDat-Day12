@@ -1,14 +1,19 @@
 # ============================================================
 # Scaling Demo: 3 Agent Instances + Redis + Nginx Load Balancer
 #
+# OPTIMIZATIONS:
+#   - Bỏ `version:` field (deprecated trong Compose v2+)
+#   - Thêm resource limits
+#   - Thêm logging limits
+#   - Sửa dockerfile path: dùng app từ 06-lab-complete nếu có,
+#     hoặc 05-scaling-reliability/production
+#
 # Chạy: docker compose up --scale agent=3
 # Test: python test_stateless.py
 #
 # Quan sát "served_by" trong response — mỗi request được xử lý
 # bởi instance khác nhau, nhưng session vẫn liên tục vì Redis!
 # ============================================================
-
-version: "3.9"
 
 services:
 
@@ -18,44 +23,70 @@ services:
   agent:
     build:
       context: ../..
-      dockerfile: 05-scaling-reliability/advanced/Dockerfile
+      dockerfile: 05-scaling-reliability/production/Dockerfile
     environment:
       - REDIS_URL=redis://redis:6379/0
       - ENVIRONMENT=demo
       - PORT=8000
+      - SESSION_TTL_SECONDS=3600
+      - MAX_HISTORY_MESSAGES=20
     env_file:
-      - .env.local
+      - path: .env.local
+        required: false  # Optional — không crash nếu không có file
     depends_on:
       redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c",
-             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
       interval: 15s
-      timeout: 5s
+      timeout: 8s
       retries: 3
+      start_period: 15s
     restart: unless-stopped
-    networks:
-      - agent_net
-    # Không expose port — chỉ access qua nginx
     deploy:
-      replicas: 3           # ← scale to 3 instances
+      replicas: 3
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "3"
+    networks:
+      - agent_net
 
   # ──────────────────────────────────────
   # Redis
   # ──────────────────────────────────────
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    command: >
+      redis-server
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+      --loglevel warning
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 160M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
     networks:
       - agent_net
 
@@ -63,13 +94,24 @@ services:
   # Nginx — Load Balancer
   # ──────────────────────────────────────
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     ports:
       - "8080:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - agent
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 32M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - agent_net
 

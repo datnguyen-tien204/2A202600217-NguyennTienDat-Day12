@@ -1,14 +1,20 @@
 """
-✅ ADVANCED — Centralized Config Management (12-Factor: Config in Env)
+✅ PRODUCTION — Centralized Config Management (12-Factor: Config in Env)
 
 Tất cả config đọc từ environment variables.
 - Không có giá trị nhạy cảm trong code
 - Dễ thay đổi giữa dev/staging/production
 - Validation rõ ràng — fail fast nếu thiếu config quan trọng
+
+OPTIMIZATION: Dùng __post_init__ để validate sau khi khởi tạo,
+đảm bảo Settings object luôn hợp lệ trước khi dùng.
 """
 import os
 import logging
 from dataclasses import dataclass, field
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -34,17 +40,23 @@ class Settings:
         default_factory=lambda: os.getenv("ALLOWED_ORIGINS", "*").split(",")
     )
 
-    def validate(self):
-        """Fail fast nếu thiếu config bắt buộc."""
-        warnings = []
+    def __post_init__(self):
+        """Validate config ngay sau khi khởi tạo."""
+        self.validate()
+
+    def validate(self) -> "Settings":
+        """Fail fast nếu thiếu config bắt buộc trong production."""
         if not self.openai_api_key:
-            warnings.append("OPENAI_API_KEY not set — using mock LLM")
-        if not self.api_key and self.environment == "production":
-            raise ValueError("AGENT_API_KEY must be set in production!")
-        for w in warnings:
-            logging.warning(w)
+            logger.warning("OPENAI_API_KEY not set — using mock LLM")
+
+        if self.environment == "production":
+            if not self.api_key:
+                raise ValueError("AGENT_API_KEY must be set in production!")
+            if self.debug:
+                logger.warning("DEBUG=true in production — consider disabling")
+
         return self
 
 
 # Singleton — import từ bất kỳ file nào đều dùng chung
-settings = Settings().validate()
+settings = Settings()

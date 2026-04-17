@@ -1,23 +1,26 @@
 services:
   - type: web
-    name: ai-agent-production
-    runtime: docker
-    region: singapore
-    plan: starter
+    name: vinmecprep-ai
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: ENVIRONMENT
         value: production
-      - key: APP_VERSION
-        value: "1.0.0"
-      - key: OPENAI_API_KEY
-        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: vinmecprep-redis
+          property: connectionString
       - key: AGENT_API_KEY
-        generateValue: true
-      - key: JWT_SECRET
-        generateValue: true
-      - key: DAILY_BUDGET_USD
-        value: "5.0"
-      - key: RATE_LIMIT_PER_MINUTE
-        value: "20"
+        sync: false
+      - key: TRAINER_API_KEY
+        sync: false
+
+  - type: redis
+    name: vinmecprep-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

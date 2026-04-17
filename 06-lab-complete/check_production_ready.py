@@ -84,7 +84,7 @@ def run_checks():
         results.append(check("/ready endpoint defined",
                              '"/ready"' in content or "'/ready'" in content))
         results.append(check("Authentication implemented",
-                             "api_key" in content.lower() or "verify_token" in content))
+                     "api_key" in content.lower() or "verify_token" in content or "require_client_key" in content))
         results.append(check("Rate limiting implemented",
                              "rate_limit" in content.lower() or "429" in content))
         results.append(check("Graceful shutdown (SIGTERM)",

@@ -1,6 +1,12 @@
 """
 Cost Guard — Bảo Vệ Budget LLM
 
+OPTIMIZATIONS:
+  - Fix bug: Global cost không reset sang ngày mới
+  - Thread-safe với threading.Lock
+  - Tách _reset_if_new_day() thành helper rõ ràng
+  - Thêm type hints đầy đủ
+
 Mục tiêu: Tránh bill bất ngờ từ LLM API.
 - Đếm tokens đã dùng mỗi ngày
 - Cảnh báo khi gần hết budget
@@ -9,16 +15,17 @@ Mục tiêu: Tránh bill bất ngờ từ LLM API.
 Trong production: lưu trong Redis/DB, không phải in-memory.
 """
 import time
+import threading
 import logging
 from dataclasses import dataclass, field
+
 from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
-
-# Giá token (tham khảo, thay đổi theo model)
-PRICE_PER_1K_INPUT_TOKENS = 0.00015   # GPT-4o-mini: $0.15/1M input
-PRICE_PER_1K_OUTPUT_TOKENS = 0.0006   # GPT-4o-mini: $0.60/1M output
+# Giá token (tham khảo GPT-4o-mini — kiểm tra pricing page của provider)
+PRICE_PER_1K_INPUT_TOKENS = 0.00015   # $0.15/1M input
+PRICE_PER_1K_OUTPUT_TOKENS = 0.0006   # $0.60/1M output
 
 
 @dataclass
@@ -39,18 +46,32 @@ class UsageRecord:
 class CostGuard:
     def __init__(
         self,
-        daily_budget_usd: float = 1.0,       # $1/ngày per user
-        global_daily_budget_usd: float = 10.0, # $10/ngày tổng cộng
-        warn_at_pct: float = 0.8,              # Cảnh báo khi dùng 80%
+        daily_budget_usd: float = 1.0,
+        global_daily_budget_usd: float = 10.0,
+        warn_at_pct: float = 0.8,
     ):
         self.daily_budget_usd = daily_budget_usd
         self.global_daily_budget_usd = global_daily_budget_usd
         self.warn_at_pct = warn_at_pct
+
         self._records: dict[str, UsageRecord] = {}
-        self._global_today = time.strftime("%Y-%m-%d")
         self._global_cost = 0.0
+        self._global_day = time.strftime("%Y-%m-%d")
+        self._lock = threading.Lock()  # ✅ Thread-safe
+
+    def _reset_if_new_day(self) -> None:
+        """
+        BUGFIX: Reset global cost khi sang ngày mới.
+        Bug gốc: _global_cost không bao giờ reset → luôn bị block sau $10.
+        """
+        today = time.strftime("%Y-%m-%d")
+        if today != self._global_day:
+            self._global_cost = 0.0
+            self._global_day = today
+            logger.info(f"New day {today} — global cost reset to $0")
 
     def _get_record(self, user_id: str) -> UsageRecord:
+        """Lấy hoặc tạo mới UsageRecord cho user, reset nếu sang ngày mới."""
         today = time.strftime("%Y-%m-%d")
         record = self._records.get(user_id)
         if not record or record.day != today:
@@ -60,68 +81,85 @@ class CostGuard:
     def check_budget(self, user_id: str) -> None:
         """
         Kiểm tra budget trước khi gọi LLM.
-        Raise 402 nếu vượt budget.
+        Raise 402 nếu vượt budget user.
+        Raise 503 nếu vượt global budget.
         """
-        record = self._get_record(user_id)
+        with self._lock:
+            self._reset_if_new_day()  # ✅ Reset global cost nếu sang ngày mới
+            record = self._get_record(user_id)
 
-        # Global budget check
-        if self._global_cost >= self.global_daily_budget_usd:
-            logger.critical(f"GLOBAL BUDGET EXCEEDED: ${self._global_cost:.4f}")
-            raise HTTPException(
-                status_code=503,
-                detail="Service temporarily unavailable due to budget limits. Try again tomorrow.",
-            )
+            # Global budget check
+            if self._global_cost >= self.global_daily_budget_usd:
+                logger.critical(
+                    f"GLOBAL BUDGET EXCEEDED: ${self._global_cost:.4f} / ${self.global_daily_budget_usd}"
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Service temporarily unavailable due to budget limits. Try again tomorrow.",
+                )
 
-        # Per-user budget check
-        if record.total_cost_usd >= self.daily_budget_usd:
-            raise HTTPException(
-                status_code=402,  # Payment Required
-                detail={
-                    "error": "Daily budget exceeded",
-                    "used_usd": record.total_cost_usd,
-                    "budget_usd": self.daily_budget_usd,
-                    "resets_at": "midnight UTC",
-                },
-            )
+            # Per-user budget check
+            if record.total_cost_usd >= self.daily_budget_usd:
+                raise HTTPException(
+                    status_code=402,  # Payment Required
+                    detail={
+                        "error": "Daily budget exceeded",
+                        "used_usd": record.total_cost_usd,
+                        "budget_usd": self.daily_budget_usd,
+                        "resets_at": "midnight UTC",
+                    },
+                )
 
-        # Warning khi gần hết budget
-        if record.total_cost_usd >= self.daily_budget_usd * self.warn_at_pct:
-            logger.warning(
-                f"User {user_id} at {record.total_cost_usd/self.daily_budget_usd*100:.0f}% budget"
-            )
+            # Warning khi gần hết budget
+            usage_pct = record.total_cost_usd / self.daily_budget_usd
+            if usage_pct >= self.warn_at_pct:
+                logger.warning(
+                    f"User {user_id} at {usage_pct * 100:.0f}% daily budget "
+                    f"(${record.total_cost_usd:.4f} / ${self.daily_budget_usd})"
+                )
 
     def record_usage(
         self, user_id: str, input_tokens: int, output_tokens: int
     ) -> UsageRecord:
         """Ghi nhận usage sau khi gọi LLM xong."""
-        record = self._get_record(user_id)
-        record.input_tokens += input_tokens
-        record.output_tokens += output_tokens
-        record.request_count += 1
+        with self._lock:
+            record = self._get_record(user_id)
+            record.input_tokens += input_tokens
+            record.output_tokens += output_tokens
+            record.request_count += 1
 
-        cost = (input_tokens / 1000 * PRICE_PER_1K_INPUT_TOKENS +
-                output_tokens / 1000 * PRICE_PER_1K_OUTPUT_TOKENS)
-        self._global_cost += cost
+            call_cost = (
+                input_tokens / 1000 * PRICE_PER_1K_INPUT_TOKENS
+                + output_tokens / 1000 * PRICE_PER_1K_OUTPUT_TOKENS
+            )
+            self._global_cost += call_cost
 
-        logger.info(
-            f"Usage: user={user_id} req={record.request_count} "
-            f"cost=${record.total_cost_usd:.4f}/{self.daily_budget_usd}"
-        )
-        return record
+            logger.info(
+                f"Usage: user={user_id} req={record.request_count} "
+                f"cost=${record.total_cost_usd:.4f}/{self.daily_budget_usd} "
+                f"global=${self._global_cost:.4f}"
+            )
+            return record
 
     def get_usage(self, user_id: str) -> dict:
-        record = self._get_record(user_id)
-        return {
-            "user_id": user_id,
-            "date": record.day,
-            "requests": record.request_count,
-            "input_tokens": record.input_tokens,
-            "output_tokens": record.output_tokens,
-            "cost_usd": record.total_cost_usd,
-            "budget_usd": self.daily_budget_usd,
-            "budget_remaining_usd": max(0, self.daily_budget_usd - record.total_cost_usd),
-            "budget_used_pct": round(record.total_cost_usd / self.daily_budget_usd * 100, 1),
-        }
+        with self._lock:
+            record = self._get_record(user_id)
+            return {
+                "user_id": user_id,
+                "date": record.day,
+                "requests": record.request_count,
+                "input_tokens": record.input_tokens,
+                "output_tokens": record.output_tokens,
+                "cost_usd": record.total_cost_usd,
+                "budget_usd": self.daily_budget_usd,
+                "budget_remaining_usd": max(0.0, self.daily_budget_usd - record.total_cost_usd),
+                "budget_used_pct": round(record.total_cost_usd / self.daily_budget_usd * 100, 1),
+            }
+
+    @property
+    def global_cost(self) -> float:
+        with self._lock:
+            return self._global_cost
 
 
 # Singleton
