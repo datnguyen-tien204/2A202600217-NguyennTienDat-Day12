@@ -11,6 +11,8 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: REQUIRE_REDIS
         value: "true"
       - key: REDIS_URL
