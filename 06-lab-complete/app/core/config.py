@@ -102,10 +102,8 @@ class Settings:
                 raise ValueError("AGENT_API_KEY phải được set trong production!")
             if not self.trainer_api_key:
                 raise ValueError("TRAINER_API_KEY phải được set trong production!")
-            if not self.llm_api_key:
-                raise ValueError("LLM_API_KEY phải được set trong production!")
         if not self.llm_api_key:
-            logger.warning("LLM_API_KEY chưa set – sẽ fail khi gọi LLM thật")
+            logger.warning("LLM_API_KEY chưa set – app sẽ dùng luồng không có LLM thật khi phù hợp")
         return self
 
 
