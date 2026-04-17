@@ -22,4 +22,5 @@ services:
   - type: redis
     name: scaling-reliability-redis
     plan: free
+    ipAllowList: []
     maxmemoryPolicy: allkeys-lru
